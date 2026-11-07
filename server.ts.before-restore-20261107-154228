@@ -1,0 +1,113 @@
+
+/**
+ * Campaigns list & create
+ */
+
+// GET: Fetch campaigns from PostgreSQL
+app.get('/api/campaigns', async (_req: Request, res: Response) => {
+  try {
+    const prisma = getPrismaClient();
+
+    const campaigns = await prisma.campaign.findMany({
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    return res.json({ campaigns });
+  } catch (err: any) {
+    console.error('[Campaigns] Failed to fetch campaigns:', err.message);
+
+    return res.status(500).json({
+      error: 'Failed to fetch campaigns from database',
+      details: err.message,
+    });
+  }
+});
+
+// POST: Create campaign in PostgreSQL
+app.post('/api/campaigns', async (req: Request, res: Response) => {
+  try {
+    const {
+      name,
+      rateLimitPerHour = 250,
+      tenantId = 'tenant_default',
+    } = req.body;
+
+    if (typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({
+        error: 'Campaign name is required',
+      });
+    }
+
+    const parsedRateLimit = Number(rateLimitPerHour);
+
+    if (!Number.isInteger(parsedRateLimit) || parsedRateLimit <= 0) {
+      return res.status(400).json({
+        error: 'rateLimitPerHour must be a positive integer',
+      });
+    }
+
+    const prisma = getPrismaClient();
+
+    // Verify that the tenant exists
+    const tenant = await prisma.tenant.findUnique({
+      where: {
+        id: String(tenantId),
+      },
+    });
+
+    if (!tenant) {
+      return res.status(404).json({
+        error: 'Tenant not found',
+      });
+    }
+
+    // Permanently save campaign in PostgreSQL
+    const campaign = await prisma.campaign.create({
+      data: {
+        name: name.trim(),
+        status: 'ACTIVE',
+        tenantId: String(tenantId),
+        totalCount: 0,
+        sentCount: 0,
+        failedCount: 0,
+        rateLimitPerHour: parsedRateLimit,
+      },
+    });
+
+    console.log(`[Campaigns] Created campaign: ${campaign.id}`);
+
+    return res.status(201).json(campaign);
+  } catch (err: any) {
+    console.error('[Campaigns] Failed to create campaign:', err.message);
+
+    return res.status(500).json({
+      error: 'Failed to create campaign',
+      details: err.message,
+    });
+  }
+});
+
+/**
+ * Slack test alert dispatch
+ */
+app.post('/api/slack/test', async (req: Request, res: Response) => {
+  const {
+    title = 'Manual Test Alert',
+    message = 'ReachInbox Slack integration verified successfully.',
+    severity = 'info',
+  } = req.body;
+
+  const result = await SlackService.sendAlert({
+    title,
+    message,
+    severity,
+    fields: {
+      Environment: process.env.NODE_ENV || 'development',
+      SchedulerHost: process.env.APP_URL || 'http://localhost:3000',
+    },
+  });
+
+  res.json(result);
+});

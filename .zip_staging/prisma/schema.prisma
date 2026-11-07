@@ -1,0 +1,104 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Tenant {
+  id          String            @id @default(uuid())
+  name        String
+  slug        String            @unique
+  apiKey      String            @unique
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  users       User[]
+  campaigns   Campaign[]
+  emailJobs   EmailJob[]
+  rateLimits  RateLimitConfig[]
+  auditLogs   AuditLog[]
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  role      String   @default("MEMBER")
+  googleId  String?
+  picture   String?
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Campaign {
+  id               String     @id @default(uuid())
+  name             String
+  status           String     @default("ACTIVE")
+  tenantId         String
+  tenant           Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  totalCount       Int        @default(0)
+  sentCount        Int        @default(0)
+  failedCount      Int        @default(0)
+  rateLimitPerHour Int        @default(100)
+  emailJobs        EmailJob[]
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+}
+
+model EmailJob {
+  id             String    @id @default(uuid())
+  bullJobId      String?   @unique
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaignId     String?
+  campaign       Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  recipient      String
+  sender         String
+  subject        String
+  bodyText       String?
+  bodyHtml       String
+  status         String    @default("PENDING")
+  scheduledFor   DateTime
+  sentAt         DateTime?
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(3)
+  lastError      String?
+  idempotencyKey String    @unique
+  elasticDocId   String?
+  metadata       String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([tenantId, status])
+  @@index([scheduledFor])
+}
+
+model RateLimitConfig {
+  id            String   @id @default(uuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  windowSeconds Int      @default(3600)
+  maxRequests   Int      @default(1000)
+  burstLimit    Int      @default(50)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  action     String
+  entityType String
+  entityId   String?
+  actorEmail String
+  ipAddress  String?
+  details    String?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+}

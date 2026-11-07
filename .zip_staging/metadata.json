@@ -1,0 +1,6 @@
+{
+  "name": "ReachInbox Distributed Scheduler",
+  "description": "High-throughput distributed email scheduler with Redis Lua atomic rate limiting, BullMQ queue, PostgreSQL Prisma ORM, Elasticsearch indexing, and Google/Slack OAuth.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
